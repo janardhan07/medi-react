@@ -4,10 +4,8 @@ const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
 });
 
-export default API;
-
 // Attach JWT token to every request
-api.interceptors.request.use((config) => {
+API.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken')
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`
@@ -16,7 +14,7 @@ api.interceptors.request.use((config) => {
 })
 
 // Auto-logout on 401
-api.interceptors.response.use(
+API.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
@@ -27,4 +25,4 @@ api.interceptors.response.use(
   }
 )
 
-export default api
+export default API
