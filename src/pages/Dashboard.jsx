@@ -1,123 +1,123 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import Navbar from '../components/Navbar'
+import { statusBadge, SPECIALTY_ICONS } from '../components/helpers'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
-
-function statusClass(status) {
-  return {
-    PENDING:  'badge badge-pending',
-    ASSIGNED: 'badge badge-assigned',
-    REVIEWED: 'badge badge-reviewed',
-  }[status] || 'badge'
-}
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [cases, setCases] = useState([])
+  const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const fetchCases = async () => {
-    try {
-      const res = await api.get('/api/medical/cases')
-      setCases(res.data)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    fetchCases()
+    api.get('/api/appointments').then(r => setAppointments(r.data)).finally(() => setLoading(false))
   }, [])
 
+  const upcoming = appointments.filter(a => ['PENDING','CONFIRMED'].includes(a.status)).slice(0,3)
+
+  const patientActions = [
+    { icon:'🔍', label:'Find Doctors',    path:'/find-doctors' },
+    { icon:'🤖', label:'AI Symptom Check', path:'/symptom-check' },
+    { icon:'📅', label:'My Appointments', path:'/appointments' },
+  ]
+  const doctorActions = [
+    { icon:'📅', label:'My Appointments', path:'/appointments' },
+    { icon:'✏️', label:'Edit Profile',    path:'/doctor/profile' },
+    { icon:'🔍', label:'Find Doctors',    path:'/find-doctors' },
+  ]
+  const actions = user?.role === 'DOCTOR' ? doctorActions : patientActions
+
   return (
-    <div className="page-container">
-      {/* Header */}
-      <div className="dashboard-header">
-        <div>
-          <div className="header-greeting">Hello,</div>
-          <div className="header-name">{user?.username}</div>
-          <div className="header-role">{user?.role}</div>
+    <div className="page">
+      <Navbar />
+
+      {/* Hero header */}
+      <div style={{ background:'linear-gradient(135deg,#1e40af,#3b82f6)', padding:'28px 0' }}>
+        <div className="container" style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ color:'rgba(255,255,255,.7)', fontSize:14, marginBottom:2 }}>Good day,</div>
+            <div style={{ color:'#fff', fontSize:26, fontWeight:800 }}>
+              {user?.role === 'DOCTOR' ? 'Dr. ' : ''}{user?.fullName || user?.username}
+            </div>
+            <span className="badge" style={{ background:'rgba(255,255,255,.15)', color:'#fff', marginTop:8, display:'inline-flex' }}>
+              {user?.role}
+              {user?.role === 'DOCTOR' && user?.specialty && ` · ${user.specialty}`}
+            </span>
+          </div>
+          <button className="btn btn-outline" onClick={logout}
+            style={{ color:'#fff', borderColor:'rgba(255,255,255,.4)' }}>
+            Logout
+          </button>
         </div>
-        <button className="btn btn-danger btn-sm" onClick={logout}>
-          Logout
-        </button>
       </div>
 
-      {/* Content */}
-      <div className="content">
-        <div className="section-header">
-          <div className="section-title">
-            {user?.role === 'PATIENT' ? 'Your Cases' : user?.role === 'DOCTOR' ? 'Assigned Cases' : 'All Cases'}
-          </div>
-          {user?.role === 'PATIENT' && (
-            <button className="btn btn-primary btn-sm" onClick={() => navigate('/new-case')}>
-              + New Case
-            </button>
-          )}
+      <div className="content-wrap">
+        {/* Quick actions */}
+        <div className="quick-actions" style={{ marginBottom:28 }}>
+          {actions.map(a => (
+            <div key={a.label} className="quick-action" onClick={() => navigate(a.path)}>
+              <div className="quick-action-icon">{a.icon}</div>
+              <div className="quick-action-label">{a.label}</div>
+            </div>
+          ))}
         </div>
 
-        {loading ? (
-          <div className="spinner-center"><div className="spinner" /></div>
-        ) : cases.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">🩺</div>
-            <div>No cases yet.</div>
-            {user?.role === 'PATIENT' && (
-              <div style={{ marginTop: 8 }}>Click <strong>+ New Case</strong> to get your second opinion.</div>
-            )}
-          </div>
-        ) : (
-          cases.map((c) => (
-            <div key={c.id} className="case-card">
-              <div className="case-header">
-                <div className="case-title">{c.title}</div>
-                <span className={statusClass(c.status)}>{c.status}</span>
-              </div>
-
-              <div className="case-symptoms">{c.symptoms}</div>
-
-              {c.effectiveSpecialty && (
-                <div className="ml-box">
-                  <div className="ml-label">{c.selectedSpecialty ? '👤 Your Selected Specialist' : '🤖 AI Suggested Specialty'}</div>
-                  <div className="ml-value">
-                    {c.effectiveSpecialty}
-                    {c.mlConfidenceScore != null && (
-                      <span style={{ color: 'var(--text-gray)', fontWeight: 400, fontSize: 13, marginLeft: 8 }}>
-                        ({(c.mlConfidenceScore * 100).toFixed(0)}% match)
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 14 }}>
-                Patient: {c.patientUsername}
-                {c.assignedDoctorUsername && ` · Doctor: ${c.assignedDoctorUsername}`}
-              </div>
-
-              <div className="action-row">
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={() => navigate(`/chat/${c.id}`, { state: { caseTitle: c.title } })}
-                >
-                  💬 Chat
-                </button>
-                {user?.role === 'PATIENT' && c.status === 'PENDING' && (
-                  <button
-                    className="btn btn-primary"
-                    style={{ flex: 1 }}
-                    onClick={() => navigate(`/payment/${c.id}`, { state: { caseTitle: c.title } })}
-                  >
-                    💳 Pay Now
-                  </button>
-                )}
-              </div>
+        {/* Doctor profile completion prompt */}
+        {user?.role === 'DOCTOR' && (!user?.city || !user?.specialty) && (
+          <div className="ai-box" style={{ marginBottom:24 }}>
+            <div style={{ fontWeight:700, fontSize:16, marginBottom:6 }}>⚠️ Complete Your Profile</div>
+            <div style={{ fontSize:14, color:'#334155', marginBottom:12, lineHeight:1.6 }}>
+              Patients search by city and specialty. Without these, you won't appear in search results.
             </div>
-          ))
+            <button className="btn btn-primary btn-sm" onClick={() => navigate('/doctor/profile')}>
+              Complete Profile →
+            </button>
+          </div>
+        )}
+
+        {/* Upcoming appointments */}
+        {loading ? (
+          <div className="spinner-wrap"><div className="spinner"/></div>
+        ) : upcoming.length > 0 ? (
+          <>
+            <div className="section-header">
+              <div className="section-title">Upcoming Appointments</div>
+              <button className="btn btn-secondary btn-sm" onClick={() => navigate('/appointments')}>View All</button>
+            </div>
+            {upcoming.map(a => (
+              <div key={a.id} className="appt-card" style={{ cursor:'pointer', marginBottom:12 }}
+                onClick={() => navigate(`/appointments/${a.id}`)}>
+                <div className="appt-header">
+                  <div>
+                    <div className="appt-doctor">{user?.role==='PATIENT' ? a.doctorName : a.patientName}</div>
+                    <div className="appt-specialty">{SPECIALTY_ICONS[a.doctorSpecialty]||'🩺'} {a.doctorSpecialty}</div>
+                  </div>
+                  {statusBadge(a.status)}
+                </div>
+                <div className="appt-time">
+                  <span className="appt-time-item">📅 {new Date(a.appointmentDate+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',month:'short',day:'numeric'})}</span>
+                  <span className="appt-time-item">🕐 {a.appointmentTime}</span>
+                  <span className="appt-time-item">{a.consultType==='ONLINE'?'📹 Online':'🏥 In-person'}</span>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <div className="empty">
+            <div className="empty-icon">{user?.role==='DOCTOR'?'🩺':'📋'}</div>
+            <div className="empty-title">No appointments yet</div>
+            <div style={{ marginBottom:16 }}>
+              {user?.role==='PATIENT'
+                ? 'Find a doctor and book your first appointment'
+                : 'Complete your profile so patients can discover and book you'}
+            </div>
+            <button className="btn btn-primary"
+              onClick={() => navigate(user?.role==='PATIENT' ? '/find-doctors' : '/doctor/profile')}>
+              {user?.role==='PATIENT' ? '🔍 Find Doctors' : '✏️ Edit Profile'}
+            </button>
+          </div>
         )}
       </div>
     </div>
